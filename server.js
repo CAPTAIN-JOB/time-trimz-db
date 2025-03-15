@@ -23,6 +23,17 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
+const businessSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  bs: { type: String, required: true },
+  description: String,
+  location: String,
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'business_owner', required: true }
+});
+
+const Business = mongoose.model('Business', businessSchema);
+
+
 // Register Endpoint
 app.post('/register', async (req, res) => {
   const { name, email, password, role } = req.body;
@@ -54,7 +65,51 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Start Server
+app.post('/business', async (req, res) => {
+  const { name, bs, description, location, ownerId } = req.body;
+  try {
+    const owner = await User.findById(ownerId);
+    if (!owner || owner.role !== 'business_owner') {
+      return res.status(403).json({ message: 'Only business owners can create businesses' });
+    }
+    const newBusiness = new Business({ name, bs, description, location, owner: ownerId });
+    await newBusiness.save();
+    res.json({ message: 'Business created successfully', business: newBusiness });
+  } catch (err) {
+    res.status(500).json({ message: 'Error creating business', error: err });
+  }
+});
+
+app.get('/businesses', async (req, res) => {
+  try {
+    const businesses = await Business.find()
+      .populate('owner', 'name email')
+      .select('name bs description location');
+    res.json(businesses);
+  } catch (err) {
+    console.error('Error fetching businesses:', err);  // Log error details
+    res.status(500).json({ message: 'Error fetching businesses', error: err.message });
+  }
+});
+// Get Businesses by Business Owner
+app.get('/businesses/:ownerId', async (req, res) => {
+  const { ownerId } = req.params;
+  try {
+    const businesses = await Business.find({ owner: ownerId })
+      .populate('owner', 'name email')
+      .select('name bs description location');
+
+    if (businesses.length === 0) {
+      return res.status(404).json({ message: 'No businesses found for this owner' });
+    }
+
+    res.json(businesses);
+  } catch (err) {
+    console.error('Error fetching businesses for owner:', err);
+    res.status(500).json({ message: 'Error fetching businesses', error: err.message });
+  }
+});
+
 app.listen(5000, () => console.log('Server running on port 5000'));
 
 export default app;
